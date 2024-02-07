@@ -523,12 +523,13 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
         ) = (
             length
         ) = width = height = ground_clearance = slant_angle = fillet_radius = 0.0
-
+        print("file_path : ", file_path)
         with open(file_path, "r") as file:
             for line in file:
                 if "Velocity" in line:
                     velocity = float(line.split(":")[1].strip())
                 elif "Re" in line:
+                    print("line : ", line)
                     reynolds_number = float(line.split(":")[1].strip())
                 elif "Length" in line:
                     length = float(line.split(":")[1].strip())

@@ -16,7 +16,9 @@
 
 import os
 import time
-
+import sys
+sys.path.append("/workspace/modulus/modulus")
+sys.path.append("/workspace/modulus/")
 import torch
 from torch.cuda.amp import autocast, GradScaler
 from torch.nn.parallel import DistributedDataParallel
@@ -67,13 +69,13 @@ class MGNTrainer:
         )
 
         # instantiate validation dataset
-        rank_zero_logger.info("Loading the validation dataset...")
-        self.validation_dataset = AhmedBodyDataset(
-            name="ahmed_body_validation",
-            data_dir=C.data_dir,
-            split="validation",
-            num_samples=C.num_validation_samples,
-        )
+        # rank_zero_logger.info("Loading the validation dataset...")
+        # self.validation_dataset = AhmedBodyDataset(
+        #     name="ahmed_body_validation",
+        #     data_dir=C.data_dir,
+        #     split="validation",
+        #     num_samples=C.num_validation_samples,
+        # )
 
         # instantiate dataloader
         self.dataloader = GraphDataLoader(
@@ -85,15 +87,15 @@ class MGNTrainer:
             use_ddp=dist.world_size > 1,
         )
 
-        # instantiate validation dataloader
-        self.validation_dataloader = GraphDataLoader(
-            self.validation_dataset,
-            batch_size=C.batch_size,
-            shuffle=False,
-            drop_last=True,
-            pin_memory=True,
-            use_ddp=False,
-        )
+        # # instantiate validation dataloader
+        # self.validation_dataloader = GraphDataLoader(
+        #     self.validation_dataset,
+        #     batch_size=C.batch_size,
+        #     shuffle=False,
+        #     drop_last=True,
+        #     pin_memory=True,
+        #     use_ddp=False,
+        # )
 
         # instantiate the model
         self.model = MeshGraphNet(
@@ -231,6 +233,15 @@ if __name__ == "__main__":
     for epoch in range(trainer.epoch_init, C.epochs):
         loss_agg = 0
         for graph in trainer.dataloader:
+            print(graph)
+            memory_usage = 0
+            for tensor in graph.ndata.values():
+                memory_usage += tensor.data.numel() * tensor.data.element_size()
+            for tensor in graph.edata.values():
+                memory_usage += tensor.data.numel() * tensor.data.element_size()
+            
+            print(f"Memory usage of the DGL graph: {(memory_usage/(1024*1024*1024))} GB")
+            exit()
             graph = graph.to(dist.device)
             loss = trainer.train(graph)
             loss_agg += loss.detach().cpu().numpy()
@@ -240,9 +251,9 @@ if __name__ == "__main__":
         )
         wb.log({"loss": loss_agg})
 
-        # validation
-        if dist.rank == 0:
-            trainer.validation()
+        # # validation
+        # if dist.rank == 0:
+        #     trainer.validation()
 
         # save checkpoint
         if dist.world_size > 1:

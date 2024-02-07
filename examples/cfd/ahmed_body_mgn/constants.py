@@ -25,7 +25,7 @@ class Constants(BaseModel):
 
     ckpt_path: str = "./checkpoints"
     ckpt_name: str = "./ahmed_body"
-    data_dir: str = "../dataset"
+    data_dir: str = "/workspace/gino_Jean/data/ahmed_modulus/"
     results_dir: str = "./results"
 
     input_dim_nodes: int = 11
@@ -38,9 +38,9 @@ class Constants(BaseModel):
 
     batch_size: int = 1
     epochs: int = 500
-    num_training_samples: int = 683
-    num_validation_samples: int = 100
-    num_test_samples: int = 100
+    num_training_samples: int = 2
+    num_validation_samples: int = 0
+    num_test_samples: int = 2
 
     lr: float = 1e-4
     lr_decay_rate: float = 0.99985
