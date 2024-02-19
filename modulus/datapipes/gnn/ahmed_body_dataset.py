@@ -284,10 +284,7 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
         self.graphs = self.normalize_node()
         self.graphs = self.normalize_edge()
         import dgl.graphbolt as gb
-        dataset = gb.BuiltinDataset("ogbn-arxiv").load()
         nodes_num = [g.num_nodes() for g in self.graphs]
-        edges_num = [g.num_edges() for g in self.graphs]
-        # dgl.save_graphs('graph.dgl', self.graphs[0]) 
         self.CSC_graphs = [gb.from_dglgraph(g, True) for g in self.graphs]
 
         for i, g in enumerate(self.CSC_graphs):

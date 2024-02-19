@@ -53,7 +53,6 @@ except ImportError:
 # Instantiate constants
 C = Constants()
 
-node_x, node_y, edge_x = None, None, None
 class MGNTrainer:
     def __init__(self, wb, dist, rank_zero_logger):
         self.dist = dist
@@ -166,17 +165,7 @@ class MGNTrainer:
             y_norm = torch.norm(torch.flatten(graph.ndata["y"]), p=2)
             loss = diff_norm / y_norm
             return loss
-    
-    def new_forward(self, graph):
-        # forward pass
-        with autocast(enabled=C.amp):
-            pred = self.model(node_x, edge_x, graph)
-            diff_norm = torch.norm(
-                torch.flatten(pred) - torch.flatten(node_y), p=2
-            )
-            y_norm = torch.norm(torch.flatten(node_y), p=2)
-            loss = diff_norm / y_norm
-            return loss
+
 
     def backward(self, loss):
         # backward pass
@@ -341,7 +330,7 @@ if __name__ == "__main__":
                 node_x, node_y, edge_x, subgraph = prepare_graphdata(subgraph, subgraph.blocks[0])
                 sub_loss = trainer.train(subgraph)
                 sub_loss_agg += sub_loss.detach().cpu().numpy()
-            sub_loss_agg /= len(subgraph_dataloder)
+            sub_loss_agg /= (j+1)
             loss_agg += sub_loss_agg
         loss_agg /= len(trainer.dataloader)
         rank_zero_logger.info(
