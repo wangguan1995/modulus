@@ -37,6 +37,7 @@ from modulus.launch.utils import load_checkpoint, save_checkpoint
 from constants import Constants
 
 try:
+    import dgl
     from dgl.dataloading import GraphDataLoader
 except:
     raise ImportError(
@@ -52,7 +53,7 @@ except ImportError:
 # Instantiate constants
 C = Constants()
 
-
+node_x, node_y, edge_x = None, None, None
 class MGNTrainer:
     def __init__(self, wb, dist, rank_zero_logger):
         self.dist = dist
@@ -165,6 +166,17 @@ class MGNTrainer:
             y_norm = torch.norm(torch.flatten(graph.ndata["y"]), p=2)
             loss = diff_norm / y_norm
             return loss
+    
+    def new_forward(self, graph):
+        # forward pass
+        with autocast(enabled=C.amp):
+            pred = self.model(node_x, edge_x, graph)
+            diff_norm = torch.norm(
+                torch.flatten(pred) - torch.flatten(node_y), p=2
+            )
+            y_norm = torch.norm(torch.flatten(node_y), p=2)
+            loss = diff_norm / y_norm
+            return loss
 
     def backward(self, loss):
         # backward pass
@@ -230,21 +242,107 @@ if __name__ == "__main__":
     start = time.time()
     rank_zero_logger.info("Training started...")
 
+    def add_edge_feature(MiniBatch, subgraph):
+        pos = MiniBatch.node_features["pos"]
+        if pos is None:
+            raise ValueError(
+                "'pos' does not exist in the node data of one or more graphs."
+            )
+
+        row, col = subgraph.edges()
+        row = row.long()
+        col = col.long()
+
+        disp = pos[row] - pos[col]
+        disp_norm = torch.linalg.norm(disp, dim=-1, keepdim=True)
+        return torch.cat((disp, disp_norm), dim=-1)
+    
+    def normalize_edge(edata):
+        from modulus.datapipes.gnn.utils import load_json
+        edge_stats = load_json("edge_stats.json")
+        return (edata - edge_stats["edge_mean"]) / edge_stats["edge_std"]
+    
+    def block_to_homogeneous(block, ndata, edata):
+        """Convert a DGLBlock to a homogeneous graph.
+
+        This function performs a two-step process to convert a given block into a
+        homogeneous graph. It first transforms the block into a heterogeneous graph,
+        treating its source nodes as heterogeneous nodes. Then, this heterogeneous
+        graph is further converted to a homogeneous graph. The function outputs
+        includes the homogeneous graph, the mapping from node type to node type ID,
+        node type count offsets, and the number of destination nodes for each node
+        type. Notably, the `source_ndata` of the original block is retained and
+        stored in the `source_ndata_name` attribute of the homogeneous graph.
+
+        Parameters
+        ----------
+        block : dgl.Block
+            The block to convert.
+        source_ndata : dict[str, Tensor]
+            The source node features of the block.
+        source_ndata_name : str
+            The name of the source node features in the homogeneous graph.
+        
+        Returns
+        -------
+        DGL.Graph
+            The converted homogeneous graph.
+        dict[str, int]
+            The mapping from node type to node type ID.
+        list[int]
+            The node type count offsets.
+        dict[str, int]
+            The number of destination nodes for each node type.
+        """
+        import numpy as np
+        num_dst_nodes_dict = {}
+        num_src_nodes_dict = {}
+        for ntype in block.dsttypes:
+            num_dst_nodes_dict[ntype] = block.number_of_dst_nodes(ntype)
+        for ntype in block.srctypes:
+            num_src_nodes_dict[ntype] = block.number_of_src_nodes(ntype)
+
+        hetero_edges = {}
+        for srctpye, etype, dsttype in block.canonical_etypes:
+            src, dst = block.all_edges(etype=etype, order="eid")
+            hetero_edges[(srctpye, etype, dsttype)] = (src, dst)
+        hetero_g = dgl.heterograph(
+            hetero_edges,
+            num_nodes_dict=num_src_nodes_dict,
+            idtype=block.idtype,
+            device=block.device,
+        )
+        hetero_g.ndata['x'] = ndata['x']
+        hetero_g.ndata['y'] = ndata['y']
+        hetero_g.edata['x'] = edata['x']
+        
+        homo_g, _, _ = dgl.to_homogeneous(
+            hetero_g, ndata=ndata.keys(), edata=edata.keys(), return_count=True
+        )
+        return homo_g
+    
+    def prepare_graphdata(subgraph, block):
+        node_x = subgraph.node_features['x']
+        node_y = subgraph.node_features['y']
+        edge_x = add_edge_feature(subgraph, block)
+        edge_x = normalize_edge(edge_x)
+        # https://github.com/dmlc/dgl/issues/6296
+        subgraph = block_to_homogeneous(block, {'x':node_x, 'y':node_y}, {'x':edge_x})
+        subgraph = subgraph.to(dist.device)
+        return node_x, node_y, edge_x, subgraph
+
+
     for epoch in range(trainer.epoch_init, C.epochs):
         loss_agg = 0
-        for graph in trainer.dataloader:
-            print(graph)
-            memory_usage = 0
-            for tensor in graph.ndata.values():
-                memory_usage += tensor.data.numel() * tensor.data.element_size()
-            for tensor in graph.edata.values():
-                memory_usage += tensor.data.numel() * tensor.data.element_size()
-            
-            print(f"Memory usage of the DGL graph: {(memory_usage/(1024*1024*1024))} GB")
-            exit()
-            graph = graph.to(dist.device)
-            loss = trainer.train(graph)
-            loss_agg += loss.detach().cpu().numpy()
+        for i, idx in enumerate(trainer.dataloader):
+            subgraph_dataloder = trainer.dataset.subgraph_dataloders[idx]
+            sub_loss_agg = 0
+            for j, subgraph in enumerate(subgraph_dataloder):
+                node_x, node_y, edge_x, subgraph = prepare_graphdata(subgraph, subgraph.blocks[0])
+                sub_loss = trainer.train(subgraph)
+                sub_loss_agg += sub_loss.detach().cpu().numpy()
+            sub_loss_agg /= len(subgraph_dataloder)
+            loss_agg += sub_loss_agg
         loss_agg /= len(trainer.dataloader)
         rank_zero_logger.info(
             f"epoch: {epoch}, loss: {loss_agg:10.3e}, lr: {trainer.get_lr()}, time per epoch: {(time.time()-start):10.3e}"

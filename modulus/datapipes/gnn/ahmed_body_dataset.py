@@ -94,27 +94,27 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
         num_samples: int = 10,
         invar_keys: List[str] = [
             "pos",
-            "velocity",
-            "reynolds_number",
-            "length",
-            "width",
-            "height",
-            "ground_clearance",
-            "slant_angle",
-            "fillet_radius",
+            # "velocity",
+            # "reynolds_number",
+            # "length",
+            # "width",
+            # "height",
+            # "ground_clearance",
+            # "slant_angle",
+            # "fillet_radius",
         ],
         outvar_keys: List[str] = ["p", "wallShearStress"],
         normalize_keys: List[str] = [
             "p",
             "wallShearStress",
-            "velocity",
-            "reynolds_number",
-            "length",
-            "width",
-            "height",
-            "ground_clearance",
-            "slant_angle",
-            "fillet_radius",
+            # "velocity",
+            # "reynolds_number",
+            # "length",
+            # "width",
+            # "height",
+            # "ground_clearance",
+            # "slant_angle",
+            # "fillet_radius",
         ],
         normalization_bound: Tuple[float, float] = (-1.0, 1.0),
         force_reload: bool = False,
@@ -192,6 +192,7 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
             )
 
         self.graphs = []
+        self.subgraph_dataloders = []
         if self.compute_drag:
             self.normals = []
             self.areas = []
@@ -243,7 +244,6 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
                 graph.ndata["fillet_radius"] = fillet_radius * torch.ones_like(
                     graph.ndata["pos"][:, [0]]
                 )
-
             if "normals" in invar_keys or self.compute_drag:
                 mesh = pv.read(file_path)
                 mesh.compute_normals(
@@ -283,14 +283,42 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
 
         self.graphs = self.normalize_node()
         self.graphs = self.normalize_edge()
+        import dgl.graphbolt as gb
+        dataset = gb.BuiltinDataset("ogbn-arxiv").load()
+        nodes_num = [g.num_nodes() for g in self.graphs]
+        edges_num = [g.num_edges() for g in self.graphs]
+        # dgl.save_graphs('graph.dgl', self.graphs[0]) 
+        self.CSC_graphs = [gb.from_dglgraph(g, True) for g in self.graphs]
+
+        for i, g in enumerate(self.CSC_graphs):
+            item_set = gb.ItemSet(torch.arange(nodes_num[i], dtype=torch.int32), names="seed_nodes")
+            nodes_sampler = gb.ItemSampler(item_set, batch_size= 128*128, shuffle=True)
+            sub_graph_sampler = nodes_sampler.sample_neighbor(g, [10, 10]) # 2 layers.
+            np.save("./tmp/node_x.npy", self.graphs[i].ndata["x"].numpy())
+            np.save("./tmp/node_y.npy", self.graphs[i].ndata["y"].numpy())
+            np.save("./tmp/node_pos.npy", self.graphs[i].ndata["pos"].numpy())
+            feature = [
+                gb.OnDiskFeatureData(
+                    domain="node", name="x",
+                    format="numpy", path="./tmp/node_x.npy", in_memory=False),
+                gb.OnDiskFeatureData(
+                    domain="node", name="y",
+                    format="numpy", path="./tmp/node_y.npy", in_memory=False),
+                gb.OnDiskFeatureData(
+                    domain="node", name="pos",
+                    format="numpy", path="./tmp/node_pos.npy", in_memory=False),
+            ]
+            feature_store = gb.TorchBasedFeatureStore(feature)
+            sub_graph_sampler = sub_graph_sampler.fetch_feature(feature_store, node_feature_keys=["x", "y", "pos"])
+            subgraph_dataloder = gb.DataLoader(sub_graph_sampler)
+            self.subgraph_dataloders.append(subgraph_dataloder)
 
     def __getitem__(self, idx):
         graph = self.graphs[idx]
         if self.compute_drag:
             sid = self.numbers[idx]
             return graph, sid, self.normals[idx], self.areas[idx], self.coeff[idx]
-        return graph
-
+        return idx
     def __len__(self):
         return self.length
 
@@ -319,6 +347,8 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
                 )
 
             row, col = graph.edges()
+            print(type(row))
+            print("row", (row))
             row = row.long()
             col = col.long()
 
@@ -356,7 +386,11 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
                 self.graphs[i].ndata[key] = (
                     self.graphs[i].ndata[key] - self.node_stats[key + "_mean"]
                 ) / self.node_stats[key + "_std"]
-
+            # print(len(invar_keys), invar_keys)
+            # print(len(self.input_keys), self.input_keys)
+            # print(len(self.output_keys), self.output_keys)
+            # for key in invar_keys:
+            #     print(self.graphs[i].ndata[key])
             self.graphs[i].ndata["x"] = torch.cat(
                 [self.graphs[i].ndata[key] for key in self.input_keys], dim=-1
             )
@@ -526,23 +560,24 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
         print("file_path : ", file_path)
         with open(file_path, "r") as file:
             for line in file:
-                if "Velocity" in line:
-                    velocity = float(line.split(":")[1].strip())
-                elif "Re" in line:
-                    print("line : ", line)
-                    reynolds_number = float(line.split(":")[1].strip())
-                elif "Length" in line:
-                    length = float(line.split(":")[1].strip())
-                elif "Width" in line:
-                    width = float(line.split(":")[1].strip())
-                elif "Height" in line:
-                    height = float(line.split(":")[1].strip())
-                elif "GroundClearance" in line:
-                    ground_clearance = float(line.split(":")[1].strip())
-                elif "SlantAngle" in line:
-                    slant_angle = float(line.split(":")[1].strip())
-                elif "FilletRadius" in line:
-                    fillet_radius = float(line.split(":")[1].strip())
+                pass
+                # if "Velocity" in line:
+                #     velocity = float(line.split(":")[1].strip())
+                # elif "Re" in line:
+                #     print("line : ", line)
+                #     reynolds_number = float(line.split(":")[1].strip())
+                # elif "Length" in line:
+                #     length = float(line.split(":")[1].strip())
+                # elif "Width" in line:
+                #     width = float(line.split(":")[1].strip())
+                # elif "Height" in line:
+                #     height = float(line.split(":")[1].strip())
+                # elif "GroundClearance" in line:
+                #     ground_clearance = float(line.split(":")[1].strip())
+                # elif "SlantAngle" in line:
+                #     slant_angle = float(line.split(":")[1].strip())
+                # elif "FilletRadius" in line:
+                #     fillet_radius = float(line.split(":")[1].strip())
 
         return (
             velocity,
