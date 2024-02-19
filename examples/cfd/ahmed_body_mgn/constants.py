@@ -25,10 +25,11 @@ class Constants(BaseModel):
 
     ckpt_path: str = "./checkpoints"
     ckpt_name: str = "./ahmed_body"
-    data_dir: str = "/workspace/gino_Jean/data/ahmed_modulus/"
+    # data_dir: str = "/workspace/gino_Jean/data/ahmed_modulus/"
+    data_dir: str = "/workspace/gino_Jean/data/toyota/"
     results_dir: str = "./results"
 
-    input_dim_nodes: int = 11
+    input_dim_nodes: int = 3
     input_dim_edges: int = 4
     output_dim: int = 4
     aggregation: int = "sum"

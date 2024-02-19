@@ -102,6 +102,7 @@ class MGNTrainer:
             C.input_dim_nodes,
             C.input_dim_edges,
             C.output_dim,
+            processor_size=100,
             aggregation=C.aggregation,
             hidden_dim_node_encoder=C.hidden_dim_node_encoder,
             hidden_dim_edge_encoder=C.hidden_dim_edge_encoder,
@@ -233,7 +234,6 @@ if __name__ == "__main__":
     for epoch in range(trainer.epoch_init, C.epochs):
         loss_agg = 0
         for graph in trainer.dataloader:
-            print(graph)
             memory_usage = 0
             for tensor in graph.ndata.values():
                 memory_usage += tensor.data.numel() * tensor.data.element_size()
@@ -241,7 +241,6 @@ if __name__ == "__main__":
                 memory_usage += tensor.data.numel() * tensor.data.element_size()
             
             print(f"Memory usage of the DGL graph: {(memory_usage/(1024*1024*1024))} GB")
-            exit()
             graph = graph.to(dist.device)
             loss = trainer.train(graph)
             loss_agg += loss.detach().cpu().numpy()

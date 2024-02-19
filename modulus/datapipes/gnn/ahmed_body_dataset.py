@@ -94,27 +94,27 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
         num_samples: int = 10,
         invar_keys: List[str] = [
             "pos",
-            "velocity",
-            "reynolds_number",
-            "length",
-            "width",
-            "height",
-            "ground_clearance",
-            "slant_angle",
-            "fillet_radius",
+            # "velocity",
+            # "reynolds_number",
+            # "length",
+            # "width",
+            # "height",
+            # "ground_clearance",
+            # "slant_angle",
+            # "fillet_radius",
         ],
         outvar_keys: List[str] = ["p", "wallShearStress"],
         normalize_keys: List[str] = [
             "p",
             "wallShearStress",
-            "velocity",
-            "reynolds_number",
-            "length",
-            "width",
-            "height",
-            "ground_clearance",
-            "slant_angle",
-            "fillet_radius",
+            # "velocity",
+            # "reynolds_number",
+            # "length",
+            # "width",
+            # "height",
+            # "ground_clearance",
+            # "slant_angle",
+            # "fillet_radius",
         ],
         normalization_bound: Tuple[float, float] = (-1.0, 1.0),
         force_reload: bool = False,
@@ -526,23 +526,24 @@ class AhmedBodyDataset(DGLDataset, Datapipe):
         print("file_path : ", file_path)
         with open(file_path, "r") as file:
             for line in file:
-                if "Velocity" in line:
-                    velocity = float(line.split(":")[1].strip())
-                elif "Re" in line:
-                    print("line : ", line)
-                    reynolds_number = float(line.split(":")[1].strip())
-                elif "Length" in line:
-                    length = float(line.split(":")[1].strip())
-                elif "Width" in line:
-                    width = float(line.split(":")[1].strip())
-                elif "Height" in line:
-                    height = float(line.split(":")[1].strip())
-                elif "GroundClearance" in line:
-                    ground_clearance = float(line.split(":")[1].strip())
-                elif "SlantAngle" in line:
-                    slant_angle = float(line.split(":")[1].strip())
-                elif "FilletRadius" in line:
-                    fillet_radius = float(line.split(":")[1].strip())
+                pass
+                # if "Velocity" in line:
+                #     velocity = float(line.split(":")[1].strip())
+                # elif "Re" in line:
+                #     print("line : ", line)
+                #     reynolds_number = float(line.split(":")[1].strip())
+                # elif "Length" in line:
+                #     length = float(line.split(":")[1].strip())
+                # elif "Width" in line:
+                #     width = float(line.split(":")[1].strip())
+                # elif "Height" in line:
+                #     height = float(line.split(":")[1].strip())
+                # elif "GroundClearance" in line:
+                #     ground_clearance = float(line.split(":")[1].strip())
+                # elif "SlantAngle" in line:
+                #     slant_angle = float(line.split(":")[1].strip())
+                # elif "FilletRadius" in line:
+                #     fillet_radius = float(line.split(":")[1].strip())
 
         return (
             velocity,
