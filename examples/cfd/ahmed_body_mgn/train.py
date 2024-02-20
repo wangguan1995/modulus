@@ -69,13 +69,13 @@ class MGNTrainer:
         )
 
         # instantiate validation dataset
-        # rank_zero_logger.info("Loading the validation dataset...")
-        # self.validation_dataset = AhmedBodyDataset(
-        #     name="ahmed_body_validation",
-        #     data_dir=C.data_dir,
-        #     split="validation",
-        #     num_samples=C.num_validation_samples,
-        # )
+        rank_zero_logger.info("Loading the validation dataset...")
+        self.validation_dataset = AhmedBodyDataset(
+            name="ahmed_body_validation",
+            data_dir=C.data_dir,
+            split="validation",
+            num_samples=C.num_validation_samples,
+        )
 
         # instantiate dataloader
         self.dataloader = GraphDataLoader(
@@ -87,26 +87,27 @@ class MGNTrainer:
             use_ddp=dist.world_size > 1,
         )
 
-        # # instantiate validation dataloader
-        # self.validation_dataloader = GraphDataLoader(
-        #     self.validation_dataset,
-        #     batch_size=C.batch_size,
-        #     shuffle=False,
-        #     drop_last=True,
-        #     pin_memory=True,
-        #     use_ddp=False,
-        # )
+        # instantiate validation dataloader
+        self.validation_dataloader = GraphDataLoader(
+            self.validation_dataset,
+            batch_size=C.batch_size,
+            shuffle=False,
+            drop_last=True,
+            pin_memory=True,
+            use_ddp=False,
+        )
 
         # instantiate the model
         self.model = MeshGraphNet(
             C.input_dim_nodes,
             C.input_dim_edges,
             C.output_dim,
-            processor_size=100,
+            processor_size=15,
             aggregation=C.aggregation,
             hidden_dim_node_encoder=C.hidden_dim_node_encoder,
             hidden_dim_edge_encoder=C.hidden_dim_edge_encoder,
             hidden_dim_node_decoder=C.hidden_dim_node_decoder,
+            hidden_dim_processor=C.hidden_dim_processor,
         )
         if C.jit:
             self.model = torch.jit.script(self.model).to(dist.device)
@@ -250,9 +251,9 @@ if __name__ == "__main__":
         )
         wb.log({"loss": loss_agg})
 
-        # # validation
-        # if dist.rank == 0:
-        #     trainer.validation()
+        # validation
+        if dist.rank == 0:
+            trainer.validation()
 
         # save checkpoint
         if dist.world_size > 1:

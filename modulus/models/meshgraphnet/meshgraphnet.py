@@ -191,10 +191,23 @@ class MeshGraphNet(Module):
         edge_features: Tensor,
         graph: Union[DGLGraph, List[DGLGraph], CuGraphCSC],
     ) -> Tensor:
+        print(f"MGN 1, memory used in GPU before inference = {(torch.cuda.memory_allocated(device=None)/(1024*1024*1024)):1f} GB")
+        # edge upsampling : [269226, 4] -> [269226, 128]
         edge_features = self.edge_encoder(edge_features)
+
+        print(f"MGN 2, memory used in GPU before inference = {(torch.cuda.memory_allocated(device=None)/(1024*1024*1024)):1f} GB")
+        # node upsampling : [68012, 11] -> [68012, 128]
         node_features = self.node_encoder(node_features)
+
+        print(f"MGN 3, memory used in GPU before inference = {(torch.cuda.memory_allocated(device=None)/(1024*1024*1024)):1f} GB")
+        # output : [68012, 128]
         x = self.processor(node_features, edge_features, graph)
+
+        print(f"MGN 4, memory used in GPU before inference = {(torch.cuda.memory_allocated(device=None)/(1024*1024*1024)):1f} GB")
+        # output downsampling: [68012, 128] -> [68012, 4]
         x = self.node_decoder(x)
+
+        print(f"MGN 5, memory used in GPU before inference = {(torch.cuda.memory_allocated(device=None)/(1024*1024*1024)):1f} GB")
         return x
 
 

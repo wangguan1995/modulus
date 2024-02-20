@@ -33,14 +33,15 @@ class Constants(BaseModel):
     input_dim_edges: int = 4
     output_dim: int = 4
     aggregation: int = "sum"
-    hidden_dim_node_encoder: int = 256
-    hidden_dim_edge_encoder: int = 256
-    hidden_dim_node_decoder: int = 256
+    hidden_dim_node_encoder: int = 12
+    hidden_dim_edge_encoder: int = 12
+    hidden_dim_node_decoder: int = 12
+    hidden_dim_processor: int = 6
 
     batch_size: int = 1
     epochs: int = 500
-    num_training_samples: int = 2
-    num_validation_samples: int = 0
+    num_training_samples: int = 25
+    num_validation_samples: int = 5
     num_test_samples: int = 2
 
     lr: float = 1e-4
